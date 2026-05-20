@@ -57,6 +57,8 @@ const char *obstructionKindName(ObstructionKind k) {
     return "DppCrossLane (\u00a73 Class 2: DPP modifier)";
   case ObstructionKind::DsBpermuteGather:
     return "DsBpermuteGather (\u00a73 Class 2: ds_bpermute_b32)";
+  case ObstructionKind::DsPermuteScatter:
+    return "DsPermuteScatter (\u00a73 Class 2: ds_permute_b32)";
   case ObstructionKind::NonCommutativeAtomic:
     return "NonCommutativeAtomic (\u00a73 Class 3: cmpswap/swap/xchg, replica race)";
   case ObstructionKind::CmpxFromLaneId:
@@ -909,6 +911,15 @@ ObstructionReport buildObstructionReport(ArrayRef<DecodedInst> insts,
       report.sites.push_back(std::move(site));
       continue;
     }
+    if (sop == CanonicalOp::DS_PERMUTE_B32) {
+      ObstructionSite site;
+      site.inst = &di;
+      site.kind = ObstructionKind::DsPermuteScatter;
+      site.rewrite = RewriteId::P6b_DsPermute;
+      site.rewriteImplemented = true;
+      report.sites.push_back(std::move(site));
+      continue;
+    }
 
     // --- §3 Class 3: replica races on shared state ------------------
     // The CanonicalOp set here is the complete enumeration of
@@ -1212,6 +1223,7 @@ RaiseFailure selectFailureFromReport(const ObstructionReport &report) {
     case ObstructionKind::DsSwizzle:
     case ObstructionKind::DppCrossLane:
     case ObstructionKind::DsBpermuteGather:
+    case ObstructionKind::DsPermuteScatter:
     case ObstructionKind::None:
       llvm_unreachable("ObstructionKind classified as unrewritable but "
                        "buildObstructionReport never tags it that way");

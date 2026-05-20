@@ -106,6 +106,7 @@ bool operandForcesSGPR(Intrinsic::ID id, unsigned operandIdx) {
 bool isIntrinsicVGPRSafePropagator(Intrinsic::ID id) {
   switch (id) {
   case Intrinsic::amdgcn_ds_bpermute:
+  case Intrinsic::amdgcn_ds_permute:
   case Intrinsic::amdgcn_ds_swizzle:
   case Intrinsic::amdgcn_update_dpp:
   case Intrinsic::amdgcn_make_buffer_rsrc:
@@ -812,8 +813,12 @@ bool isDppCtrlRewritable(unsigned ctrl) {
   // current 16-lane row.
   if (ctrl >= ROW_XMASK_FIRST && ctrl <= ROW_XMASK_LAST)
     return true;
-  // Every other family (ROW_ROR, WAVE_*, ROW_MIRROR /
-  // ROW_HALF_MIRROR, BCAST15 / BCAST31, ROW_NEWBCAST / ROW_SHARE)
+  // ROW_MIRROR reverses lanes within a 16-lane row: lane i reads from
+  // lane 15 - i.  Stays within a single row, wave-size-oblivious.
+  if (ctrl == ROW_MIRROR)
+    return true;
+  // Every other family (ROW_ROR, WAVE_*, ROW_HALF_MIRROR,
+  // BCAST15 / BCAST31, ROW_NEWBCAST / ROW_SHARE)
   // either crosses 16-lane row boundaries in a wave-size-dependent
   // way OR has a correctness argument this rewrite has not yet
   // codified.  Refusing loudly via this predicate surfaces new-
@@ -970,6 +975,15 @@ DppLaneMap buildDppLaneMap(IRBuilder<> &B, Value *withinRow,
     unsigned N = ctrl - ROW_XMASK0;
     Value *nVal = ConstantInt::get(i32Ty, N);
     out.srcWithinRow = B.CreateXor(withinRow, nVal, "cwd_dpp_xmask_src");
+    out.inRange = ConstantInt::getTrue(B.getContext());
+    return out;
+  }
+
+  if (ctrl == ROW_MIRROR) {
+    // row_mirror: lane i reads from lane (15 - i) within the 16-lane row.
+    // Always in-range — the result stays within [0, 15].
+    out.srcWithinRow = B.CreateSub(ConstantInt::get(i32Ty, 15), withinRow,
+                                   "mirror_src");
     out.inRange = ConstantInt::getTrue(B.getContext());
     return out;
   }
