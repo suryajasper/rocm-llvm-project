@@ -65,6 +65,8 @@ const char *obstructionKindName(ObstructionKind K) {
     return "DppCrossLane (\u00a73 Class 2: DPP modifier)";
   case ObstructionKind::DsBpermuteGather:
     return "DsBpermuteGather (\u00a73 Class 2: ds_bpermute_b32)";
+  case ObstructionKind::DsPermuteScatter:
+    return "DsPermuteScatter (\u00a73 Class 2: ds_permute_b32)";
   case ObstructionKind::NonCommutativeAtomic:
     return "NonCommutativeAtomic (\u00a73 Class 3: cmpswap/swap/xchg, replica race)";
   case ObstructionKind::CmpxFromLaneId:
@@ -918,6 +920,16 @@ ObstructionReport buildObstructionReport(ArrayRef<DecodedInst> Insts,
       continue;
     }
 
+    if (Sop == CanonicalOp::DS_PERMUTE_B32) {
+      ObstructionSite Site;
+      Site.Inst = &Di;
+      Site.Kind = ObstructionKind::DsPermuteScatter;
+      Site.Rewrite = RewriteId::P6b_DsPermute;
+      Site.RewriteImplemented = true;
+      Report.Sites.push_back(std::move(Site));
+      continue;
+    }
+
     // --- §3 Class 3: replica races on shared state ------------------
     // The CanonicalOp set here is the complete enumeration of
     // non-commutative atomics modeled in canonical-op.h today. New
@@ -1220,6 +1232,7 @@ RaiseFailure selectFailureFromReport(const ObstructionReport &Report) {
     case ObstructionKind::DsSwizzle:
     case ObstructionKind::DppCrossLane:
     case ObstructionKind::DsBpermuteGather:
+    case ObstructionKind::DsPermuteScatter:
     case ObstructionKind::None:
       llvm_unreachable("ObstructionKind classified as unrewritable but "
                        "buildObstructionReport never tags it that way");

@@ -182,6 +182,7 @@ enum class ObstructionKind : uint8_t {
   DsSwizzle,                // ds_swizzle_b32 -- wave-size-translation.md §5.3 row P6.
   DppCrossLane,             // any `_dpp` variant -- wave-size-translation.md §5.3 row P5.
   DsBpermuteGather,         // ds_bpermute_b32 -- wave-size-translation.md §5.3 row P1 (handler landed).
+  DsPermuteScatter,         // ds_permute_b32 -- wave-size-translation.md §5.3 row P6.b (handler landed).
 
   // ── Class 3 (wave-size-translation.md §6): replica races on shared state ──
   // Modulo-replication introduces racers on the same address from
@@ -204,6 +205,7 @@ enum class ObstructionKind : uint8_t {
 enum class RewriteId : uint8_t {
   None = 0,                 // no rewrite available (outcome-c class).
   P1_DsBpermute,            // llvm.amdgcn.ds.bpermute lift.
+  P6b_DsPermute,            // llvm.amdgcn.ds.permute lift.
   P2_PermLane16,            // llvm.amdgcn.permlane16 lift.
   P3_PermLane64,            // (reserved; v_permlane64 has no rewrite, see C2_PermLane64).
   P4_PermLaneSwap,          // LDS round-trip or permlane16-pair lowering for *_swap variants.

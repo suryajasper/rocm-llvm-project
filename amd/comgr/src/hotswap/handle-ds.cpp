@@ -774,6 +774,45 @@ HandlerResult handleDS(RaiseContext &Ctx, const DecodedInst &Di,
     Hr.Handled = true;
     return Hr;
   }
+
+  if (Sop == CanonicalOp::DS_PERMUTE_B32) {
+    // Forward (scatter) permute: each lane writes its `src1` value to
+    // the lane whose index is `src0 >> 2` (the selector is pre-scaled
+    // to DS byte addressing).  Semantically the inverse of
+    // `ds_bpermute_b32` (gather).  Both exist on gfx950.
+    //
+    // Wave32->wave64 selector rebasing is identical to DS_BPERMUTE_B32:
+    // the source-wave-local byte offset must be relocated into the
+    // current source-wave half under ModuloReplication.
+    //
+    // Emitted outside `emitUnderExec` -- convergent instruction, same
+    // contract as DS_BPERMUTE_B32.
+    Value *Index = Op.src(0);
+    if (Ctx.Projection.numSourceWavesPerTarget() > 1 &&
+        Ctx.Isa.isWave32() && !Ctx.TargetIsa.isWave32()) {
+      constexpr uint32_t kSourceWaveLanes = 32;
+      constexpr uint32_t kDwordBytes = 4;
+      constexpr uint32_t kSourceWaveBytes = kSourceWaveLanes * kDwordBytes;
+      Value *LocalIndex = Ctx.B.CreateAnd(
+          Index, Ctx.B.getInt32(kSourceWaveBytes - 1), "perm_local_addr");
+      Value *LaneId = Ctx.emitLaneIdx();
+      Value *SourceWaveLaneBase = Ctx.B.CreateAnd(
+          LaneId, Ctx.B.getInt32(~(kSourceWaveLanes - 1)),
+          "perm_srcwave_lane_base");
+      Value *SourceWaveByteBase = Ctx.B.CreateShl(
+          SourceWaveLaneBase, Ctx.B.getInt32(2), "perm_srcwave_byte_base");
+      Index = Ctx.B.CreateOr(LocalIndex, SourceWaveByteBase,
+                             "perm_srcwave_addr");
+    }
+    Value *Src = Op.src(1);
+    Function *Perm = Intrinsic::getOrInsertDeclaration(
+        &Ctx.M, Intrinsic::amdgcn_ds_permute);
+    Value *Scattered = Ctx.B.CreateCall(Perm, {Index, Src}, "perm");
+    Ctx.writeReg32(Op.dst(), Scattered);
+    Hr.Handled = true;
+    return Hr;
+  }
+
   if (Sop == CanonicalOp::DS_SWIZZLE_B32) {
     // P6 lowering -- see the ds_swizzle_b32 row of hotswap/docs/wave-
     // size-translation.md §5.3: lift `ds_swizzle_b32` through
