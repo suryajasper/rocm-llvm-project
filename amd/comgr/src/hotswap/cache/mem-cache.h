@@ -131,6 +131,11 @@ size_t memCacheInFlightCountForTesting();
 // the coalescing race deterministically.
 size_t waitForMemCacheWaitersForTesting(const TranslationCacheRequest &request,
                                         size_t count, unsigned timeoutMs);
+// Overrides the key-derivation function (default: translationCacheKey /
+// SHA-256). Passing nullptr restores the default. Used by the scaling
+// benchmark to measure alternative hash strategies on the hot path.
+void setMemCacheKeyFnForTesting(
+    std::string (*fn)(const TranslationCacheRequest &));
 #endif
 
 } // namespace COMGR::hotswap

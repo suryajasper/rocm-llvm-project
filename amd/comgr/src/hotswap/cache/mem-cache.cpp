@@ -180,6 +180,23 @@ MemCacheEntryRef adopt(PipelineResult &result) {
   return entry;
 }
 
+namespace {
+// Key-derivation indirection. Production uses translationCacheKey (SHA-256).
+// The scaling benchmark overrides this (under the TESTING build) to measure
+// alternative hashes without changing the production path.
+using KeyFn = std::string (*)(const TranslationCacheRequest &);
+std::string defaultDeriveKey(const TranslationCacheRequest &request) {
+  return translationCacheKey(request);
+}
+KeyFn &activeKeyFn() {
+  static KeyFn fn = &defaultDeriveKey;
+  return fn;
+}
+std::string deriveKey(const TranslationCacheRequest &request) {
+  return activeKeyFn()(request);
+}
+} // namespace
+
 MemCacheResult MemCache::getOrCompute(const TranslationCacheRequest &request,
                                       const TranslationProducer &producer) {
   Lookups.fetch_add(1, std::memory_order_relaxed);
@@ -199,7 +216,7 @@ MemCacheResult MemCache::getOrCompute(const TranslationCacheRequest &request,
     return result;
   }
 
-  const std::string key = translationCacheKey(request);
+  const std::string key = deriveKey(request);
 
   // Uncacheable request (empty source, missing gfx, no kernels, unreadable
   // rules): run the producer directly and cache nothing. Never terminate or
@@ -431,6 +448,11 @@ void resetMemCacheForTesting(size_t budgetBytesOverride) {
   p = new MemCache(budgetBytesOverride);
 }
 
+void setMemCacheKeyFnForTesting(
+    std::string (*fn)(const TranslationCacheRequest &)) {
+  activeKeyFn() = fn ? fn : &defaultDeriveKey;
+}
+
 size_t memCacheEntryCountForTesting() {
   return activeInstance().entryCountForTesting();
 }
@@ -441,7 +463,7 @@ size_t memCacheInFlightCountForTesting() {
 
 size_t waitForMemCacheWaitersForTesting(const TranslationCacheRequest &request,
                                         size_t count, unsigned timeoutMs) {
-  const std::string key = translationCacheKey(request);
+  const std::string key = deriveKey(request);
   return activeInstance().waitForWaitersForTesting(key, count, timeoutMs);
 }
 #endif

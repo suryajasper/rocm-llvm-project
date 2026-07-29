@@ -45,3 +45,38 @@ comgr_configure_test_target(MemCacheTests)
 
 add_test(NAME MemCacheTests
   COMMAND $<TARGET_FILE:MemCacheTests>)
+
+add_executable(MemCacheBenchmark MemCacheBenchmark.cpp)
+target_compile_definitions(MemCacheBenchmark PRIVATE COMGR_HOTSWAP_MEM_CACHE_TESTING)
+target_link_libraries(MemCacheBenchmark PRIVATE
+  hotswap::translation_cache
+  ${LLVM_PTHREAD_LIB})
+target_include_directories(MemCacheBenchmark PRIVATE
+  ${LLVM_INCLUDE_DIRS}
+  ${PROJECT_SOURCE_DIR}/src
+  $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>)
+comgr_configure_test_target(MemCacheBenchmark)
+
+# Binary 1: pure hash-strategy throughput (needs LLVMSupport for SHA256).
+add_executable(HashThroughputBench hash_throughput_bench.cc)
+target_link_libraries(HashThroughputBench PRIVATE
+  hotswap::translation_cache
+  ${LLVM_PTHREAD_LIB})
+target_include_directories(HashThroughputBench PRIVATE
+  ${LLVM_INCLUDE_DIRS}
+  ${PROJECT_SOURCE_DIR}/src
+  $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>)
+comgr_configure_test_target(HashThroughputBench)
+
+# Binary 2: cache-mode x hash scaling. Needs the mem-cache testing seam.
+add_executable(CacheScalingBench cache_scaling_bench.cc)
+target_compile_definitions(CacheScalingBench PRIVATE
+  COMGR_HOTSWAP_MEM_CACHE_TESTING)
+target_link_libraries(CacheScalingBench PRIVATE
+  hotswap::translation_cache
+  ${LLVM_PTHREAD_LIB})
+target_include_directories(CacheScalingBench PRIVATE
+  ${LLVM_INCLUDE_DIRS}
+  ${PROJECT_SOURCE_DIR}/src
+  $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>)
+comgr_configure_test_target(CacheScalingBench)
